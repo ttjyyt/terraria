@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>泰拉瑞亚种子解析器</title>
+    <style>
+        /* --- 整体与布局 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        /* --- 文本样式 --- */
+        h1 { color: #000000; margin-bottom: 0.5rem; }
+        p { color: #555; margin-bottom: 1.5rem; }
+        
+        /* --- 输入与按钮 --- */
+        .input-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 1.5rem; }
+        .input-row { display: flex; gap: 10px; align-items: center; }
+        .input-row label { font-weight: 500; }
+        #seedInput, #worldSize, #randInput { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        #calculateBtn, #reverseBtn { padding: 12px 20px; border: none; background-color: #333333; color: white; border-radius: 4px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s; }
+        #calculateBtn:hover, #reverseBtn:hover { background-color: #000000; }
+        
+        /* --- 结果显示区域 --- */
+        .results h2 { margin-top: 0; margin-bottom: 1rem; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem; }
+        .analysis-section { margin-top: 1.5rem; border-top: 2px solid #000000; padding-top: 1rem; }
+        .result-item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0.25rem 0; font-size: 1.1rem; }
+        .result-item span { margin-right: 10px; }
+        .result-item strong { color: #000000; font-weight: 600; }
+
+        /* --- 备注框样式 --- */
+        .result-note {
+            width: 100%;
+            margin-top: 8px;
+            padding: 8px 12px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #333;
+            text-align: left;
+            display: none; /* 默认隐藏 */
+        }
+        .note-container { margin-bottom: 1rem; }
+        .error-message { color: #d93025; margin-top: 1rem; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>泰拉瑞亚种子解析器</h1>
+        <p>输入世界种子并选择大小，计算世界特征与生成物数量。</p>
+        
+        <div class="input-container">
+            <div class="input-row"> <label for="seedInput">世界种子:</label> <input type="number" id="seedInput" placeholder="在此输入数字种子"> </div>
+            <div class="input-row"> <label for="worldSize">世界大小:</label> <select id="worldSize"> <option value="small">小世界</option> <option value="medium" selected>中世界</option> <option value="large">大世界</option> </select> </div>
+            <button id="calculateBtn">计算</button>
+            <!-- 错误信息显示区域 -->
+            <p id="error-message" class="error-message" style="margin-top: 10px; margin-bottom: 0;">请输入一个有效的数字种子！</p>
+            <p id="celebration-error-message" class="error-message" style="margin-top: 10px; margin-bottom: 0;">无法解析彩蛋种子。</p>
+        </div>
+
+        <div class="results">
+            <!-- 主要解析器结果区域 -->
+        </div>
+        
+        <!-- 新增的反推功能区域 -->
+        <div class="analysis-section">
+            <h2>随机数反推种子</h2>
+            <div class="input-container">
+                <div class="input-row">
+                    <input type="number" id="randInput" placeholder="输入0到1之间的随机数" step="any">
+                </div>
+                <button id="reverseBtn">反推种子</button>
+                <!-- 错误信息显示区域已移动到此处 -->
+                <p id="reverseError" class="error-message" style="margin-top: 10px; margin-bottom: 0;">请输入一个有效的随机数 (例如: 0.123)。</p>
+            </div>
+            <div id="reverseResults">
+                <div class="result-item"><span>作为第①随机数时:</span><strong id="seedFrom1">...</strong></div>
+                <div class="result-item"><span>作为第②随机数时:</span><strong id="seedFrom2">...</strong></div>
+                <div class="result-item"><span>作为第③随机数时:</span><strong id="seedFrom3">...</strong></div>
+                <div class="result-item"><span>作为第⑨随机数时:</span><strong id="seedFrom9">...</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 数据与元素获取 ---
+        // ... (之前的所有元素获取)
+        const seedInput = document.getElementById('seedInput');
+        const worldSizeEl = document.getElementById('worldSize');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const errorMessage = document.getElementById('error-message');
+        const celebrationErrorMessage = document.getElementById('celebration-error-message');
+        const resultsContainer = document.querySelector('.results');
+        
+        // 新增反推功能的元素
+        const randInput = document.getElementById('randInput');
+        const reverseBtn = document.getElementById('reverseBtn');
+        const reverseError = document.getElementById('reverseError');
+        const seedFrom1El = document.getElementById('seedFrom1');
+        const seedFrom2El = document.getElementById('seedFrom2');
+        const seedFrom3El = document.getElementById('seedFrom3');
+        const seedFrom9El = document.getElementById('seedFrom9');
+
+        const initialResultsHTML = `
+            <h2>计算结果</h2>
+            <div class="result-item"><span>第一随机数:</span><strong id="rand1">...</strong></div>
+            <div class="result-item"><span>第二随机数:</span><strong id="rand2">...</strong></div>
+            <div class="result-item"><span>第三随机数:</span><strong id="rand3">...</strong></div>
+            <div class="result-item"><span>第九随机数:</span><strong id="rand9">...</strong></div>
+            <div class="analysis-section">
+                <h2>世界特征解析</h2>
+                 <div class="result-item"><span>初始向导名字:</span><strong id="guideName">...</strong><small id="guideNameNote" class="result-note"></small></div>
+                 <div class="result-item"><span>发光苔藓种类:</span><strong id="mossType">...</strong></div>
+                 <div class="result-item"><span>村正金箱深度:</span><strong id="dungeonChestDepth">...</strong><small id="chestNote" class="result-note"></small></div>
+                 <div class="result-item"><span>地牢颜色:</span><strong id="dungeonColor">...</strong></div>
+                 <div class="result-item"><span>红气球空岛位置:</span><strong id="skyIslandPosition">...</strong><small id="skyIslandNote" class="result-note"></small></div>
+                 <div class="result-item"><span>佛罗里达海洋:</span><strong id="floridaOcean">...</strong></div>
+                 <div class="result-item"><span>海洋洞穴:</span><strong id="oceanCave">...</strong></div>
+                 <div class="result-item"><span>微光湖位置:</span><strong id="shimmerLocation">...</strong><small id="shimmerNote" class="result-note"></small></div>
+                 <div class="result-item"><span>V形地形分布:</span><strong id="vShapeBiomes">...</strong><small id="vShapeNote" class="result-note"></small></div>
+                 <div class="result-item"><span>丛林神龛种类:</span><strong id="jungleShrineType">...</strong></div>
+            </div>
+            <div class="analysis-section">
+                <h2>世界生成物数量</h2>
+                <div class="note-container"><small id="quantityNote" class="result-note"></small></div>
+                <div class="result-item"><span>湖:</span><strong id="gen_lake">...</strong></div>
+                <div class="result-item"><span>生命树群:</span><strong id="gen_livingTree">...</strong></div>
+                <div class="result-item"><span>蜂巢:</span><strong id="gen_beeHive">...</strong></div>
+                <div class="result-item"><span>丛林神龛:</span><strong id="gen_jungleShrine">...</strong></div>
+                <div class="result-item"><span>花岗岩洞:</span><strong id="gen_granite">...</strong></div>
+                <div class="result-item"><span>大理石洞:</span><strong id="gen_marble">...</strong></div>
+                <div class="result-item"><span>沙丘/绿洲:</span><strong id="gen_dune">...</strong></div>
+                <div class="result-item"><span>地下小屋:</span><strong id="gen_cabin">...</strong></div>
+                <div class="result-item"><span>暗影宝箱:</span><strong id="gen_shadowChest">...</strong></div>
+                <div class="result-item"><span>地下金宝箱:</span><strong id="gen_goldChest">...</strong></div>
+                <div class="result-item"><span>倒木:</span><strong id="gen_fallenLog">...</strong></div>
+            </div>`;
+        resultsContainer.innerHTML = initialResultsHTML; // 初始化页面
+        
+        let elements = {}; // 用于存储动态获取的元素
+        
+        // --- 核心数据 ---
+        const GUIDE_NAMES_DATA = [ { name: 'Joe', upperBound: 0.0278 }, { name: 'Connor', upperBound: 0.0556 }, { name: 'Tanner', upperBound: 0.0833 }, { name: 'Wyatt', upperBound: 0.1111 }, { name: 'Cody', upperBound: 0.1389 }, { name: 'Levi', upperBound: 0.1667 }, { name: 'Luke', upperBound: 0.1944 }, { name: 'Jack', upperBound: 0.2222 }, { name: 'Scott', upperBound: 0.2500 }, { name: 'Logan', upperBound: 0.2778 }, { name: 'Cole', upperBound: 0.3056 }, { name: 'Asher', upperBound: 0.3333 }, { name: 'Bradley', upperBound: 0.3611 }, { name: 'Jacob', upperBound: 0.3889 }, { name: 'Garrett', upperBound: 0.4167 }, { name: 'Dylan', upperBound: 0.4444 }, { name: 'Maxwell', upperBound: 0.4722 }, { name: 'Steve', upperBound: 0.5000 }, { name: 'Brett', upperBound: 0.5278 }, { name: 'Andrew', upperBound: 0.5556 }, { name: 'Harley', upperBound: 0.5833 }, { name: 'Kyle', upperBound: 0.6111 }, { name: 'Jake', upperBound: 0.6389 }, { name: 'Ryan', upperBound: 0.6667 }, { name: 'Jeffrey', upperBound: 0.6944 }, { name: 'Seth', upperBound: 0.7222 }, { name: 'Marty', upperBound: 0.7500 }, { name: 'Brandon', upperBound: 0.7778 }, { name: 'Zach', upperBound: 0.8056 }, { name: 'Jeff', upperBound: 0.8333 }, { name: 'Daniel', upperBound: 0.8611 }, { name: 'Trent', upperBound: 0.8889 }, { name: 'Kevin', upperBound: 0.9167 }, { name: 'Brian', upperBound: 0.9444 }, { name: 'Colin', upperBound: 0.9722 }, { name: 'Jan', upperBound: 1.0000 } ];
+        const WORLD_GEN_DATA = [ { id: 'gen_lake', rand: 'r1_raw', small: {min: 3, max: 5}, medium: {min: 4, max: 8}, large: {min: 6, max: 11} }, { id: 'gen_livingTree', rand: 'r1_raw', small: {min: 0, max: 2}, medium: {min: 0, max: 3}, large: {min: 0, max: 4} }, { id: 'gen_beeHive', rand: 'r1_raw', small: {min: 6, max: 8}, medium: {min: 8, max: 12}, large: {min: 11, max: 16} }, { id: 'gen_jungleShrine', rand: 'r3_raw', small: {min: 7, max: 12}, medium: {min: 10, max: 18}, large: {min: 14, max: 24} }, { id: 'gen_granite', rand: 'r1_raw', small: {min: 4, max: 8}, medium: {min: 6, max: 12}, large: {min: 8, max: 16} }, { id: 'gen_marble', rand: 'r1_raw', small: {min: 4, max: 8}, medium: {min: 9, max: 18}, large: {min: 16, max: 32} }, { id: 'gen_dune', rand: 'r1_raw', small: {min: 1, max: 2}, medium: {min: 1, max: 3}, large: {min: 2, max: 4} }, { id: 'gen_cabin', rand: 'r1_raw', small: {min: 35, max: 40}, medium: {min: 80, max: 92}, large: {min: 140, max: 160} }, { id: 'gen_shadowChest', rand: 'r2_raw', small: {min: 10, max: 15}, medium: {min: 15, max: 22}, large: {min: 20, max: 30} }, { id: 'gen_goldChest', rand: 'r3_raw', small: {min: 35, max: 40}, medium: {min: 80, max: 92}, large: {min: 140, max: 160} } ];
+
+        // --- 函数 ---
+        function getGuideName(rand) { for (const guide of GUIDE_NAMES_DATA) if (rand < guide.upperBound) return guide.name; return 'Jan'; }
+
+        function calculateRandoms() {
+            // 重置结果区域和错误提示
+            resultsContainer.innerHTML = initialResultsHTML;
+            errorMessage.style.display = 'none';
+            celebrationErrorMessage.style.display = 'none';
+
+            // 获取原始输入字符串并检查彩蛋种子
+            const seedString = seedInput.value.trim();
+            if (seedString === '') {
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            // 将字符串转为数字再转回字符串，以去除前导0
+            const normalizedSeed = parseInt(seedString, 10).toString();
+            const celebrationSeeds = ['5162020', '5162011', '5162021'];
+
+            if (celebrationSeeds.includes(normalizedSeed)) {
+                celebrationErrorMessage.style.display = 'block';
+                resultsContainer.innerHTML = ''; // 清空结果区域
+                return;
+            }
+            
+            // 动态获取元素
+            const resultIDs = ['rand1', 'rand2', 'rand3', 'rand9', 'guideName', 'mossType', 'dungeonChestDepth', 'dungeonColor', 'skyIslandPosition', 'floridaOcean', 'oceanCave', 'shimmerLocation', 'vShapeBiomes', 'jungleShrineType', 'gen_lake', 'gen_livingTree', 'gen_beeHive', 'gen_jungleShrine', 'gen_granite', 'gen_marble', 'gen_dune', 'gen_cabin', 'gen_shadowChest', 'gen_goldChest', 'gen_fallenLog'];
+            const noteIDs = ['guideNameNote', 'chestNote', 'skyIslandNote', 'shimmerNote', 'vShapeNote', 'quantityNote'];
+            elements = {};
+            resultIDs.forEach(id => elements[id] = document.getElementById(id));
+            noteIDs.forEach(id => elements[id] = document.getElementById(id));
+
+            const seed = parseInt(seedInput.value, 10);
+            const worldSize = worldSizeEl.value;
+            
+            if (isNaN(seed)) {
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            noteIDs.forEach(id => elements[id].style.display = 'block');
+
+            const M = 2147483647;
+            const r1_raw = ((1121899819 * seed + 1559595546) % M) / M;
+            const r2_raw = ((630111683 * seed + 1755192844) % M) / M;
+            const r3_raw = ((1501065279 * seed + 1649316166) % M) / M;
+            const r9_raw = ((265679591 * seed + 2099272109) % M) / M;
+            
+            elements.rand1.textContent = r1_raw.toFixed(4); elements.rand2.textContent = r2_raw.toFixed(4); elements.rand3.textContent = r3_raw.toFixed(4); elements.rand9.textContent = r9_raw.toFixed(4);
+            elements.guideName.textContent = getGuideName(r2_raw);
+            elements.guideNameNote.textContent = '注：由于汉化包的存在，向导名字可能与原版不同。';
+            if (r1_raw < 0.25) { elements.mossType.textContent = '粉色的氩苔藓'; } else if (r1_raw < 0.5) { elements.mossType.textContent = '蓝色的氙苔藓'; } else if (r1_raw < 0.75) { elements.mossType.textContent = '绿色的氪苔藓'; } else { elements.mossType.textContent = '紫色的氖苔藓'; }
+            if (r1_raw < 0.15) { elements.dungeonChestDepth.textContent = '极浅'; } else if (r1_raw < 0.4) { elements.dungeonChestDepth.textContent = '较浅'; } else if (r1_raw < 0.6) { elements.dungeonChestDepth.textContent = '中等'; } else if (r1_raw < 0.85) { elements.dungeonChestDepth.textContent = '较深'; } else { elements.dungeonChestDepth.textContent = '极深'; }
+            elements.chestNote.textContent = '注：若此位置高于地表，则会变为木箱（村正大刀变为金钥匙）。';
+            if (r2_raw < 1 / 3) { elements.dungeonColor.textContent = '蓝色'; } else if (r2_raw < 2 / 3) { elements.dungeonColor.textContent = '绿色'; } else { elements.dungeonColor.textContent = '粉色'; }
+            elements.skyIslandPosition.textContent = `${(10 + (r1_raw * 80)).toFixed(1)}% (地图从左往右)`;
+            if (r9_raw < 0.025) { elements.skyIslandNote.textContent = '补充：此空岛大概率生成雏翼。'; } else { elements.skyIslandNote.textContent = '补充：此空岛不会生成雏翼。'; }
+            if (r1_raw < 0.25) { elements.floridaOcean.textContent = (r2_raw < 0.5) ? '存在 (地图左侧)' : '存在 (地图右侧)'; } else { elements.floridaOcean.textContent = '不存在'; }
+            elements.oceanCave.textContent = (r1_raw < 1 / 3) ? '存在 (地牢同侧)' : '不存在';
+            let shimmerDepthDesc = ''; if (r1_raw < 0.2) { shimmerDepthDesc = '很浅'; } else if (r1_raw < 0.4) { shimmerDepthDesc = '中等'; } else if (r1_raw < 0.8) { shimmerDepthDesc = '很深'; } else { shimmerDepthDesc = '极深'; }
+            let shimmerHorizontalDesc = ''; if (r2_raw < 1 / 3) { shimmerHorizontalDesc = '偏左'; } else if (r2_raw < 2 / 3) { shimmerHorizontalDesc = '居中'; } else { shimmerHorizontalDesc = '偏右'; }
+            elements.shimmerLocation.textContent = `丛林同侧，深度${shimmerDepthDesc}，在边缘1/9区域内位置相对${shimmerHorizontalDesc}。`;
+            elements.shimmerNote.textContent = '注：由于受邪恶地形影响，可能不准确。';
+            let evilSide = (r3_raw < 0.5) ? '左侧' : '右侧'; let hallowSide = (r3_raw < 0.5) ? '右侧' : '左侧';
+            let jungleSideArmDesc = ''; if (r1_raw < 0.33) { jungleSideArmDesc = '远离中心'; } else if (r1_raw < 0.66) { jungleSideArmDesc = '中等距离'; } else { jungleSideArmDesc = '靠近中心'; }
+            let dungeonSideArmDesc = ''; if (r2_raw < 0.33) { dungeonSideArmDesc = '远离中心'; } else if (r2_raw < 0.66) { dungeonSideArmDesc = '中等距离'; } else { dungeonSideArmDesc = '靠近中心'; }
+            elements.vShapeBiomes.textContent = `邪恶在${evilSide}，神圣在${hallowSide}。丛林侧V臂${jungleSideArmDesc}，地牢侧V臂${dungeonSideArmDesc}。`;
+            elements.vShapeNote.textContent = '补充：邪恶地形的方向与初始云朵移动方向一致。';
+            if (r1_raw < 0.2) { elements.jungleShrineType.textContent = '荧光'; } else if (r1_raw < 0.4) { elements.jungleShrineType.textContent = '泥石'; } else if (r1_raw < 0.6) { elements.jungleShrineType.textContent = '红木'; } else if (r1_raw < 0.8) { elements.jungleShrineType.textContent = '锡砖'; } else { elements.jungleShrineType.textContent = '金砖'; }
+            elements.quantityNote.textContent = '注：部分生成物可能会被其它地形覆盖掉，导致实际数量与计算结果出现偏差。';
+            const randoms = { r1_raw, r2_raw, r3_raw };
+            for (const feature of WORLD_GEN_DATA) {
+                const { min, max } = feature[worldSize];
+                const count = Math.floor((max + 1 - min) * randoms[feature.rand] + min);
+                if (feature.id === 'gen_livingTree' && count === 0) {
+                    elements[feature.id].textContent = (r2_raw < 0.5) ? '≥ 1' : '0';
+                } else {
+                    elements[feature.id].textContent = count;
+                }
+            }
+            let fallenLogCount = 0;
+            switch (worldSize) { case 'small': fallenLogCount = 2; break; case 'medium': fallenLogCount = 3; break; case 'large': fallenLogCount = 4; break; }
+            if (r1_raw < 1 / 3) { fallenLogCount--; } else if (r1_raw >= 2 / 3) { fallenLogCount++; }
+            elements.gen_fallenLog.textContent = fallenLogCount;
+        }
+
+        function reverseCalculate() {
+            const randVal = parseFloat(randInput.value);
+            if (isNaN(randVal) || randVal < 0 || randVal >= 1) {
+                reverseError.style.display = 'block';
+                seedFrom1El.textContent = '...'; seedFrom2El.textContent = '...';
+                seedFrom3El.textContent = '...'; seedFrom9El.textContent = '...';
+                return;
+            }
+            reverseError.style.display = 'none';
+
+            // 必须使用 BigInt 进行计算以保证精度
+            const M = 2147483647n;
+            const intermediateVal = BigInt(Math.floor(randVal * 2147483647));
+
+            // 公式常量
+            const multipliers = [1796695496n, 1891800662n, 1610885040n, 648963137n];
+            const adders = [1821612595n, 1409645351n, 587487227n, 1348178552n];
+
+            // 计算
+            const seed1 = (intermediateVal * multipliers[0] + adders[0]) % M;
+            const seed2 = (intermediateVal * multipliers[1] + adders[1]) % M;
+            const seed3 = (intermediateVal * multipliers[2] + adders[2]) % M;
+            const seed9 = (intermediateVal * multipliers[3] + adders[3]) % M;
+
+            // 显示结果
+            seedFrom1El.textContent = seed1.toString();
+            seedFrom2El.textContent = seed2.toString();
+            seedFrom3El.textContent = seed3.toString();
+            seedFrom9El.textContent = seed9.toString();
+        }
+        
+        // --- 事件绑定 ---
+        calculateBtn.addEventListener('click', calculateRandoms);
+        reverseBtn.addEventListener('click', reverseCalculate);
+        seedInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') calculateBtn.click(); });
+        worldSizeEl.addEventListener('keyup', (event) => { if (event.key === 'Enter') calculateBtn.click(); });
+        randInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') reverseBtn.click(); });
+    </script>
+
+</body>
+</html>
